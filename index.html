@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>奶龙-TI 人格测试</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- 首页 -->
+  <div id="page-home" class="page active">
+    <div class="home-content">
+      <div class="logo-area">
+        <div class="logo-icon">🐉</div>
+        <h1>奶龙-TI</h1>
+        <p class="subtitle">测测你是哪种奶龙？</p>
+      </div>
+      <div class="home-desc">
+        <p>通过 4 个维度，16 道题<br>找到专属于你的奶龙人格</p>
+        <div class="dimension-preview">
+          <span>🎨 抽象 vs 正经</span>
+          <span>💭 直觉 vs 实感</span>
+          <span>🧠 理性 vs 感性</span>
+          <span>📋 计划 vs 随性</span>
+        </div>
+      </div>
+      <button id="start-btn" class="primary-btn">开始测试 →</button>
+    </div>
+  </div>
+
+  <!-- 答题页 -->
+  <div id="page-quiz" class="page">
+    <div class="quiz-header">
+      <div class="progress-bar">
+        <div id="progress-fill" class="progress-fill"></div>
+      </div>
+      <div id="progress-text" class="progress-text">1 / 16</div>
+    </div>
+    <div id="dimension-tag" class="dimension-tag"></div>
+    <h2 id="question-text" class="question-text"></h2>
+    <div id="options-container" class="options-container"></div>
+  </div>
+
+  <!-- 结果页 -->
+  <div id="page-result" class="page">
+    <div class="result-content">
+      <div class="result-label">你的奶龙-TI 类型</div>
+      <div id="result-type" class="result-type">ENFP</div>
+      <div id="result-dragon-name" class="result-dragon-name">奶察</div>
+      <div id="result-image" class="result-image">
+        <div class="image-placeholder">🐉</div>
+      </div>
+      <div id="result-desc" class="result-desc"></div>
+      <div class="result-dims">
+        <div class="dim-bar">
+          <span class="dim-label">抽象</span>
+          <div class="dim-track">
+            <div id="dim-ei" class="dim-fill"></div>
+          </div>
+          <span class="dim-label">正经</span>
+        </div>
+        <div class="dim-bar">
+          <span class="dim-label">直觉</span>
+          <div class="dim-track">
+            <div id="dim-ns" class="dim-fill"></div>
+          </div>
+          <span class="dim-label">实感</span>
+        </div>
+        <div class="dim-bar">
+          <span class="dim-label">理性</span>
+          <div class="dim-track">
+            <div id="dim-tf" class="dim-fill"></div>
+          </div>
+          <span class="dim-label">感性</span>
+        </div>
+        <div class="dim-bar">
+          <span class="dim-label">计划</span>
+          <div class="dim-track">
+            <div id="dim-jp" class="dim-fill"></div>
+          </div>
+          <span class="dim-label">随性</span>
+        </div>
+      </div>
+      <button id="retest-btn" class="secondary-btn">重新测试</button>
+    </div>
+  </div>
+
+  <!-- 管理页 -->
+  <div id="page-admin" class="page">
+    <div class="admin-content">
+      <h2>🛠 奶龙-TI 管理后台</h2>
+      <p class="subtitle">上传形象图 + 设置名称和描述</p>
+      <div id="admin-list" class="admin-list"></div>
+      <button id="admin-back-btn" class="secondary-btn">← 返回首页</button>
+    </div>
+  </div>
+
+</div>
+
+<div class="nav-bar">
+  <button class="nav-btn" data-page="home">🏠 首页</button>
+  <button class="nav-btn" data-page="admin">🛠 管理</button>
+</div>
+
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
