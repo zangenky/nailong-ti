@@ -295,6 +295,17 @@ async function renderAdminList() {
   `;
   container.appendChild(storageInfo);
 
+  // 导出/导入按钮
+  const ioDiv = document.createElement('div');
+  ioDiv.style.cssText = 'display:flex;gap:8px;margin-bottom:12px;';
+  ioDiv.innerHTML = `
+    <button id="export-btn" style="flex:1;padding:10px;background:#4CAF50;color:white;border:none;border-radius:8px;font-size:14px;cursor:pointer;">📤 导出数据</button>
+    <button id="import-btn" style="flex:1;padding:10px;background:#FF9800;color:white;border:none;border-radius:8px;font-size:14px;cursor:pointer;">📥 导入数据</button>
+  `;
+  container.appendChild(ioDiv);
+  $('export-btn').addEventListener('click', exportData);
+  $('import-btn').addEventListener('click', importData);
+
   const allCodes = Object.keys(TYPE_DATA);
   allCodes.forEach(code => {
     const info = TYPE_DATA[code];
@@ -360,6 +371,45 @@ async function renderAdminList() {
 
     container.appendChild(card);
   });
+}
+
+// ======= 导出/导入工具 =======
+async function exportData() {
+  const allTypes = Object.keys(TYPE_DATA);
+  const data = {};
+  for (const code of allTypes) {
+    const saved = CustomStorage.getTypeData(code);
+    if (saved.image || saved.name || (saved.desc && saved.desc !== TYPE_DATA[code].desc)) {
+      data[code] = saved;
+    }
+  }
+  const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'nailong-ti-backup.json';
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+  alert('✅ 数据已导出，请打开线上网页导入');
+}
+
+async function importData() {
+  const input = document.createElement('input');
+  input.type = 'file'; input.accept = '.json';
+  input.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const text = await file.text();
+    const data = JSON.parse(text);
+    let count = 0;
+    for (const [code, saved] of Object.entries(data)) {
+      if (saved.image) { await CustomStorage.saveImage(code, saved.image); count++; }
+      if (saved.name) { await CustomStorage.saveName(code, saved.name); }
+      if (saved.desc) { await CustomStorage.saveDesc(code, saved.desc); }
+    }
+    renderAdminList();
+    alert(`✅ 导入完成！已导入 ${count} 张图片`);
+  });
+  input.click();
 }
 
 // ======= 图片压缩工具 =======
