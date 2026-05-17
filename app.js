@@ -298,7 +298,7 @@ function showResult() {
 function renderResult(typeStr, scores) {
   var typeInfo = TYPE_DATA[typeStr] || { name: '未知', desc: '暂无描述', color: '#999' };
   var saved = CustomStorage.getTypeData(typeStr);
-  var imgData = saved.image || null;
+  var imgData = saved.image || typeInfo.image || null;
   var customName = saved.name || typeInfo.name;
   var customDesc = saved.desc || typeInfo.desc;
 
@@ -360,7 +360,7 @@ async function renderAdminList() {
     (function(code) {
       var info = TYPE_DATA[code];
       var saved = CustomStorage.getTypeData(code);
-      var imgSrc = saved.image || null;
+      var imgSrc = saved.image || info.image || null;
 
       var card = document.createElement('div');
       card.className = 'admin-card';
