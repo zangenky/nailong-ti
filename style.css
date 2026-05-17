@@ -168,6 +168,11 @@ body {
   width: 100%; padding: 6px 10px; border: 1px solid #ddd;
   border-radius: 6px; font-size: 13px; resize: vertical; height: 40px;
 }
+.clear-img-btn {
+  font-size: 11px; color: #f44336; background: none; border: 1px solid #f44336;
+  border-radius: 4px; padding: 2px 8px; cursor: pointer; margin-top: 4px;
+}
+.clear-img-btn:hover { background: #f44336; color: white; }
 
 /* 底部导航 */
 .nav-bar {

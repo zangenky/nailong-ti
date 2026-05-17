@@ -12,6 +12,14 @@ const CustomStorage = {
   save(data) {
     localStorage.setItem(CUSTOM_DATA_KEY, JSON.stringify(data));
   },
+  getUsage() {
+    let total = 0;
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      total += localStorage.getItem(key).length * 2; // UTF-16
+    }
+    return total;
+  },
   getImage(typeCode) {
     const all = this.get();
     return all[typeCode]?.image || null;
@@ -189,6 +197,25 @@ function renderAdminList() {
   const container = $('admin-list');
   container.innerHTML = '';
 
+  // 显示存储用量
+  const usage = CustomStorage.getUsage();
+  const usageMB = (usage / 1024 / 1024).toFixed(1);
+  const limitMB = 5;
+  const pct = Math.min(100, (usage / (limitMB * 1024 * 1024)) * 100);
+  const storageInfo = document.createElement('div');
+  storageInfo.style.cssText = 'background:rgba(255,255,255,0.15);border-radius:10px;padding:12px;margin-bottom:16px;color:white;';
+  storageInfo.innerHTML = `
+    <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;">
+      <span>存储空间</span>
+      <span>${usageMB}MB / ${limitMB}MB</span>
+    </div>
+    <div style="width:100%;height:6px;background:rgba(255,255,255,0.2);border-radius:3px;overflow:hidden;">
+      <div style="width:${pct}%;height:100%;background:${pct > 80 ? '#f44336' : '#4CAF50'};border-radius:3px;transition:width 0.3s;"></div>
+    </div>
+    ${pct > 70 ? '<div style="font-size:12px;margin-top:4px;color:#FFD700;">⚠️ 空间不足时请删除不需要的图片或使用更小的图片</div>' : ''}
+  `;
+  container.appendChild(storageInfo);
+
   const allCodes = Object.keys(TYPE_DATA);
   allCodes.forEach(code => {
     const info = TYPE_DATA[code];
@@ -201,12 +228,13 @@ function renderAdminList() {
 
     card.innerHTML = `
       <div class="type-code">${code}</div>
-      <div class="preview-img" data-code="${code}">
+      <div class="preview-img" data-code="${code}" style="position:relative;">
         ${imgSrc ? `<img src="${imgSrc}">` : '📷'}
       </div>
       <div class="admin-fields">
         <input class="admin-name" data-code="${code}" value="${saved.name || info.name}" placeholder="奶龙名字">
         <textarea class="admin-desc" data-code="${code}" placeholder="描述文字...">${saved.desc || info.desc}</textarea>
+        ${imgSrc ? `<button class="clear-img-btn" data-code="${code}">删除图片</button>` : ''}
       </div>
     `;
 
@@ -223,7 +251,7 @@ function renderAdminList() {
           alert('图片太大了！请选择 5MB 以内的图片。');
           return;
         }
-        compressImage(file, 200, 80, (dataUrl) => {
+        compressImage(file, 150, 70, (dataUrl) => {
           try {
             CustomStorage.setTypeData(code, { image: dataUrl });
             renderAdminList();
@@ -247,6 +275,17 @@ function renderAdminList() {
     descInput.addEventListener('change', () => {
       CustomStorage.setTypeData(code, { desc: descInput.value });
     });
+
+    // 删除图片
+    const clearBtn = card.querySelector('.clear-img-btn');
+    if (clearBtn) {
+      clearBtn.addEventListener('click', () => {
+        const data = CustomStorage.get();
+        if (data[code]) delete data[code].image;
+        CustomStorage.save(data);
+        renderAdminList();
+      });
+    }
 
     container.appendChild(card);
   });
