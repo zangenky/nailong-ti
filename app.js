@@ -317,8 +317,8 @@ function showResult() {
     var d = DIM_MAP[dimKeys[i]];
     typeStr += scores[d.leftCode] >= scores[d.rightCode] ? d.leftCode : d.rightCode;
   }
-  saveToHash(scores);
   renderResult(typeStr, scores);
+  saveToHash(scores);
 }
 
 function renderResult(typeStr, scores) {
