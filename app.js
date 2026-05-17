@@ -136,7 +136,7 @@ function initNavigation() {
     btn.addEventListener('click', () => {
       const page = btn.dataset.page;
       showPage(page);
-      if (page === 'admin') renderAdminList();
+      if (page === 'admin') { renderAdminList(); }
     });
   });
 }
@@ -273,28 +273,27 @@ function renderResult(typeStr, scores) {
 }
 
 // ======= 管理页 =======
-function renderAdminList() {
+async function renderAdminList() {
   const container = $('admin-list');
   container.innerHTML = '';
 
   // 显示存储用量
-  CustomStorage.getUsage().then(usage => {
-    const usageMB = (usage / 1024 / 1024).toFixed(1);
-    const limitMB = 50;
-    const pct = Math.min(100, (usage / (limitMB * 1024 * 1024)) * 100);
-    const storageInfo = document.createElement('div');
-    storageInfo.style.cssText = 'background:rgba(255,255,255,0.15);border-radius:10px;padding:12px;margin-bottom:16px;color:white;';
-    storageInfo.innerHTML = `
-      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;">
-        <span>存储空间 (IndexedDB)</span>
-        <span>${usageMB}MB / ${limitMB}MB</span>
-      </div>
-      <div style="width:100%;height:6px;background:rgba(255,255,255,0.2);border-radius:3px;overflow:hidden;">
-        <div style="width:${pct}%;height:100%;background:${pct > 80 ? '#f44336' : '#4CAF50'};border-radius:3px;transition:width 0.3s;"></div>
-      </div>
-    `;
-    container.appendChild(storageInfo);
-  });
+  const usage = await CustomStorage.getUsage();
+  const usageMB = (usage / 1024 / 1024).toFixed(1);
+  const limitMB = 50;
+  const pct = Math.min(100, (usage / (limitMB * 1024 * 1024)) * 100);
+  const storageInfo = document.createElement('div');
+  storageInfo.style.cssText = 'background:rgba(255,255,255,0.15);border-radius:10px;padding:12px;margin-bottom:16px;color:white;';
+  storageInfo.innerHTML = `
+    <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;">
+      <span>存储空间 (IndexedDB)</span>
+      <span>${usageMB}MB / ${limitMB}MB</span>
+    </div>
+    <div style="width:100%;height:6px;background:rgba(255,255,255,0.2);border-radius:3px;overflow:hidden;">
+      <div style="width:${pct}%;height:100%;background:${pct > 80 ? '#f44336' : '#4CAF50'};border-radius:3px;transition:width 0.3s;"></div>
+    </div>
+  `;
+  container.appendChild(storageInfo);
 
   const allCodes = Object.keys(TYPE_DATA);
   allCodes.forEach(code => {
