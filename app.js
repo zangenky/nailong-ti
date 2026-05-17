@@ -210,7 +210,7 @@ function renderAdminList() {
       </div>
     `;
 
-    // 点击图片上传
+    // 点击图片上传（自动压缩）
     const preview = card.querySelector('.preview-img');
     preview.addEventListener('click', () => {
       const input = document.createElement('input');
@@ -219,13 +219,19 @@ function renderAdminList() {
       input.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (ev) => {
-          const dataUrl = ev.target.result;
-          CustomStorage.setTypeData(code, { image: dataUrl });
-          renderAdminList();
-        };
-        reader.readAsDataURL(file);
+        if (file.size > 5 * 1024 * 1024) {
+          alert('图片太大了！请选择 5MB 以内的图片。');
+          return;
+        }
+        compressImage(file, 200, 80, (dataUrl) => {
+          try {
+            CustomStorage.setTypeData(code, { image: dataUrl });
+            renderAdminList();
+          } catch (err) {
+            alert('存储空间不足，请使用更小的图片。');
+            console.error(err);
+          }
+        });
       });
       input.click();
     });
@@ -244,4 +250,23 @@ function renderAdminList() {
 
     container.appendChild(card);
   });
+}
+
+// ======= 图片压缩工具 =======
+function compressImage(file, maxWidth, quality, callback) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      let w = img.width, h = img.height;
+      if (w > maxWidth) { h = h * maxWidth / w; w = maxWidth; }
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      callback(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
 }
