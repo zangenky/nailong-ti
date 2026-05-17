@@ -21,6 +21,10 @@ var _cache = {};
 function initStorage() {
   return new Promise(function(resolve) {
     _cache = {};
+    var resolved = false;
+    var done = function() { if (!resolved) { resolved = true; resolve(); } };
+    var safeTimeout = setTimeout(done, 3000); // 3 秒超时保护，防止 IndexedDB 卡死
+
     // 先加载 localStorage 数据
     try {
       var oldData = localStorage.getItem('nt-cache');
@@ -28,13 +32,11 @@ function initStorage() {
     } catch (e) {}
     // 尝试从 IndexedDB 迁移数据（旧版本用户）
     try {
-      if (!window.indexedDB) { resolve(); return; }
+      if (!window.indexedDB) { clearTimeout(safeTimeout); done(); return; }
       var req = indexedDB.open('NailongTI', 1);
-      var resolved = false;
-      var done = function() { if (!resolved) { resolved = true; resolve(); } };
       req.onsuccess = function(e) {
         var db = e.target.result;
-        if (!db.objectStoreNames.contains('types')) { db.close(); done(); return; }
+        if (!db.objectStoreNames.contains('types')) { db.close(); clearTimeout(safeTimeout); done(); return; }
         var tx = db.transaction('types', 'readonly');
         var all = tx.objectStore('types').getAll();
         var keys = tx.objectStore('types').getAllKeys();
@@ -49,6 +51,7 @@ function initStorage() {
             if (idx >= items.length) {
               syncToLocal();
               db.close();
+              clearTimeout(safeTimeout);
               done();
               return;
             }
@@ -70,10 +73,10 @@ function initStorage() {
         all.onsuccess = function() {
           keys.onsuccess = function() { finish(); };
         };
-        setTimeout(done, 800); // 超时保护
+        setTimeout(function() { clearTimeout(safeTimeout); done(); }, 800); // 超时保护
       };
-      req.onerror = function() { done(); };
-    } catch (e) { resolve(); }
+      req.onerror = function() { clearTimeout(safeTimeout); done(); };
+    } catch (e) { clearTimeout(safeTimeout); done(); }
   });
 }
 
@@ -205,7 +208,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     initNavigation();
     bindStartButton();
-    try { renderAdminList(); } catch (e) {}
+    // renderAdminList 是 async 函数，用 Promise 链处理错误
+    try { Promise.resolve(renderAdminList()).catch(function() {}); } catch (e) {}
 
     // 从 URL hash 恢复结果
     var saved = loadFromHash();
@@ -328,7 +332,7 @@ function showResult() {
     // 延迟保存 hash，避免在微信 X5 浏览器中干扰渲染
     setTimeout(function() { saveToHash(scores); }, 100);
   } catch (e) {
-    alert('计算出错：' + e.message + '\\n请截图发给管理员');
+    alert('计算出错：' + e.message + '\n请截图发给管理员');
   }
 }
 
