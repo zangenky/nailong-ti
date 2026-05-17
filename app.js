@@ -1,128 +1,109 @@
 // ======= 全局状态 =======
 var currentQuestion = 0;
-var answers = {};       // { "0": "left", "3": "right", ... }
+var answers = {};
 
-// ======= 存储管理 (IndexedDB, 更大空间) =======
+// ======= 存储管理 (localStorage, 兼容微信X5) =======
 var _cache = {};
 
-function openDB() {
-  return new Promise(function(resolve, reject) {
-    var req = indexedDB.open('NailongTI', 1);
-    req.onupgradeneeded = function(e) {
-      var db = e.target.result;
-      if (!db.objectStoreNames.contains('types')) {
-        db.createObjectStore('types');
-      }
-    };
-    req.onsuccess = function(e) { resolve(e.target.result); };
-    req.onerror = function() { reject(req.error); };
-  });
-}
-
-async function initStorage() {
-  var db = await openDB();
-  var oldData = localStorage.getItem('nailong-ti-custom');
-  var hasOldData = false;
-  if (oldData) {
-    var parsed = JSON.parse(oldData);
-    for (var code in parsed) {
-      var data = parsed[code];
-      if (data.image || data.name || data.desc) {
-        var tx = db.transaction('types', 'readwrite');
-        tx.objectStore('types').put(data, code);
-        hasOldData = true;
-      }
-    }
-    localStorage.removeItem('nailong-ti-custom');
-  }
-  var tx = db.transaction('types', 'readonly');
-  var all = tx.objectStore('types').getAll();
-  var keys = tx.objectStore('types').getAllKeys();
-  await Promise.all([new Promise(function(r) { all.onsuccess = function() { r(); }; }),
-                     new Promise(function(r) { keys.onsuccess = function() { r(); }; })]);
-  _cache = {};
-  for (var i = 0; i < (keys.result || []).length; i++) {
-    _cache[keys.result[i]] = all.result[i];
-  }
-  if (hasOldData) renderAdminList();
-}
-
-function dbWrite(code, data) {
+function initStorage() {
   return new Promise(function(resolve) {
-    var req = indexedDB.open('NailongTI', 1);
-    req.onsuccess = function(e) {
-      var db = e.target.result;
-      var tx = db.transaction('types', 'readwrite');
-      tx.objectStore('types').put(data, code);
-      tx.oncomplete = function() { db.close(); resolve(); };
-    };
+    _cache = {};
+    // 先加载 localStorage 数据
+    try {
+      var oldData = localStorage.getItem('nt-cache');
+      if (oldData) { _cache = JSON.parse(oldData); }
+    } catch (e) {}
+    // 尝试从 IndexedDB 迁移数据（旧版本用户）
+    try {
+      if (!window.indexedDB) { resolve(); return; }
+      var req = indexedDB.open('NailongTI', 1);
+      var resolved = false;
+      var done = function() { if (!resolved) { resolved = true; resolve(); } };
+      req.onsuccess = function(e) {
+        var db = e.target.result;
+        if (!db.objectStoreNames.contains('types')) { db.close(); done(); return; }
+        var tx = db.transaction('types', 'readonly');
+        var all = tx.objectStore('types').getAll();
+        var keys = tx.objectStore('types').getAllKeys();
+        var finish = function() {
+          for (var i = 0; i < (keys.result || []).length; i++) {
+            _cache[keys.result[i]] = all.result[i];
+          }
+          syncToLocal();
+          db.close();
+          done();
+        };
+        all.onsuccess = function() {
+          keys.onsuccess = function() { finish(); };
+        };
+        setTimeout(done, 800); // 超时保护
+      };
+      req.onerror = function() { done(); };
+    } catch (e) { resolve(); }
   });
 }
 
-function dbDeleteKey(code) {
-  return new Promise(function(resolve) {
-    var req = indexedDB.open('NailongTI', 1);
-    req.onsuccess = function(e) {
-      var db = e.target.result;
-      var tx = db.transaction('types', 'readwrite');
-      tx.objectStore('types').delete(code);
-      tx.oncomplete = function() { db.close(); resolve(); };
-    };
-  });
+function syncToLocal() {
+  try { localStorage.setItem('nt-cache', JSON.stringify(_cache)); } catch (e) {}
+}
+
+function saveData(code, updates) {
+  _cache[code] = _cache[code] || {};
+  for (var k in updates) { _cache[code][k] = updates[k]; }
+  syncToLocal();
+}
+
+function deleteDataKey(code, key) {
+  if (!_cache[code]) return;
+  delete _cache[code][key];
+  var hasData = false;
+  for (var k in _cache[code]) { hasData = true; break; }
+  if (!hasData) { delete _cache[code]; }
+  syncToLocal();
 }
 
 var CustomStorage = {
   getCache: function() { return _cache; },
   getTypeData: function(code) { return _cache[code] || {}; },
 
-  saveImage: async function(code, dataUrl) {
-    var existing = _cache[code] || {};
-    existing.image = dataUrl;
-    _cache[code] = existing;
-    await dbWrite(code, existing);
+  saveImage: function(code, dataUrl) {
+    return Promise.resolve().then(function() {
+      saveData(code, { image: dataUrl });
+    });
   },
 
-  saveName: async function(code, name) {
-    var existing = _cache[code] || {};
-    existing.name = name;
-    _cache[code] = existing;
-    await dbWrite(code, existing);
+  saveName: function(code, name) {
+    return Promise.resolve().then(function() {
+      saveData(code, { name: name });
+    });
   },
 
-  saveDesc: async function(code, desc) {
-    var existing = _cache[code] || {};
-    existing.desc = desc;
-    _cache[code] = existing;
-    await dbWrite(code, existing);
+  saveDesc: function(code, desc) {
+    return Promise.resolve().then(function() {
+      saveData(code, { desc: desc });
+    });
   },
 
-  deleteImage: async function(code) {
-    var existing = _cache[code];
-    if (existing) {
-      delete existing.image;
-      if (Object.keys(existing).length === 0) {
-        delete _cache[code];
-        await dbDeleteKey(code);
-      } else {
-        _cache[code] = existing;
-        await dbWrite(code, existing);
-      }
-    }
+  deleteImage: function(code) {
+    return Promise.resolve().then(function() {
+      deleteDataKey(code, 'image');
+    });
   },
 
-  getUsage: async function() {
+  getUsage: function() {
     var total = 0;
     for (var key in _cache) {
       total += JSON.stringify(_cache[key]).length * 2;
     }
-    return total;
+    return Promise.resolve(total);
   }
 };
 
-// ======= URL Hash 持久化（兼容所有浏览器，包括微信） =======
+// ======= URL Hash 持久化（微信浏览器防刷新丢失） =======
 function saveToHash(scores) {
+  var s = scores;
   var parts = ['EI', 'NS', 'TF', 'JP'].map(function(d) {
-    return scores[DIM_MAP[d].leftCode] + ',' + scores[DIM_MAP[d].rightCode];
+    return s[DIM_MAP[d].leftCode] + ',' + s[DIM_MAP[d].rightCode];
   });
   try { window.location.hash = 'r=' + parts.join('|'); } catch (e) {}
 }
@@ -132,59 +113,57 @@ function loadFromHash() {
     var h = window.location.hash;
     if (!h || h.indexOf('r=') !== 1) return null;
     var parts = h.substring(3).split('|');
-    var keys = ['EI', 'NS', 'TF', 'JP'];
+    if (parts.length !== 4) return null;
+    var dimKeys = ['EI', 'NS', 'TF', 'JP'];
     var scores = { E: 0, I: 0, N: 0, S: 0, T: 0, F: 0, J: 0, P: 0 };
-    for (var i = 0; i < parts.length; i++) {
+    for (var i = 0; i < 4; i++) {
       var vals = parts[i].split(',');
-      var d = DIM_MAP[keys[i]];
+      var d = DIM_MAP[dimKeys[i]];
       scores[d.leftCode] = parseInt(vals[0]) || 0;
       scores[d.rightCode] = parseInt(vals[1]) || 0;
     }
     var typeStr = '';
-    ['EI', 'NS', 'TF', 'JP'].forEach(function(dimKey) {
-      var d = DIM_MAP[dimKey];
+    for (var i = 0; i < 4; i++) {
+      var d = DIM_MAP[dimKeys[i]];
       typeStr += scores[d.leftCode] >= scores[d.rightCode] ? d.leftCode : d.rightCode;
-    });
+    }
     return { t: typeStr, s: scores };
   } catch (e) { return null; }
 }
 
 function clearHash() {
   try {
-    history.replaceState ? history.replaceState(null, '', location.pathname + location.search) : (location.hash = '');
+    if (window.history && window.history.replaceState) {
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    } else { window.location.hash = ''; }
   } catch (e) {}
 }
 
 // ======= DOM =======
 function $(id) { return document.getElementById(id); }
 
-document.addEventListener('DOMContentLoaded', async function() {
-  var isOnline = window.location.protocol !== 'file:';
-  try {
-    var hasAdminParam = false;
-    if (window.URLSearchParams) {
-      hasAdminParam = new URLSearchParams(window.location.search).get('admin') === '1';
-    }
-    if (isOnline && !hasAdminParam) {
-      var btn = document.getElementById('admin-nav-btn');
-      if (btn) btn.style.display = 'none';
-    }
-  } catch (e) { /* ignore */ }
-  try {
-    await initStorage();
-  } catch (e) {
-    console.warn('存储初始化失败，继续以只读模式运行', e);
-    _cache = {};
-  }
-  initNavigation();
-  bindStartButton();
-  try { renderAdminList(); } catch (e) {}
+document.addEventListener('DOMContentLoaded', function() {
+  initStorage().then(function() {
+    // 线上版通过 ?admin=1 参数显示管理按钮
+    try {
+      var isOnline = window.location.protocol !== 'file:';
+      var hasAdmin = window.location.search.indexOf('admin=1') >= 0;
+      if (isOnline && !hasAdmin) {
+        var btn = document.getElementById('admin-nav-btn');
+        if (btn) btn.style.display = 'none';
+      }
+    } catch (e) {}
 
-  // 从 URL hash 恢复结果（微信浏览器防刷新）
-  var saved = loadFromHash();
-  if (saved && saved.t) {
-    renderResult(saved.t, saved.s);
-  }
+    initNavigation();
+    bindStartButton();
+    try { renderAdminList(); } catch (e) {}
+
+    // 从 URL hash 恢复结果
+    var saved = loadFromHash();
+    if (saved && saved.t) {
+      renderResult(saved.t, saved.s);
+    }
+  });
 });
 
 // ======= 导航 =======
@@ -192,7 +171,7 @@ function initNavigation() {
   var btns = document.querySelectorAll('.nav-btn');
   for (var i = 0; i < btns.length; i++) {
     btns[i].addEventListener('click', function() {
-      var page = this.dataset.page;
+      var page = this.getAttribute('data-page');
       showPage(page);
       if (page === 'admin') { renderAdminList(); }
     });
@@ -200,15 +179,11 @@ function initNavigation() {
 }
 
 function showPage(page) {
-  var map = {
-    home: 'page-home',
-    admin: 'page-admin',
-    quiz: 'page-quiz',
-    result: 'page-result'
-  };
   var pages = document.querySelectorAll('.page');
   for (var i = 0; i < pages.length; i++) { pages[i].classList.remove('active'); }
-  $(map[page]).classList.add('active');
+  var target = document.getElementById('page-' + page);
+  if (target) target.classList.add('active');
+
   var btns = document.querySelectorAll('.nav-btn');
   for (var i = 0; i < btns.length; i++) { btns[i].classList.remove('active'); }
   var nb = document.querySelector('.nav-btn[data-page="' + page + '"]');
@@ -241,7 +216,6 @@ function renderQuestion() {
 
   $('progress-fill').style.width = ((currentQuestion + 1) / total * 100) + '%';
   $('progress-text').textContent = (currentQuestion + 1) + ' / ' + total;
-
   $('question-text').textContent = q.q;
 
   var container = $('options-container');
@@ -264,7 +238,6 @@ function renderQuestion() {
 function answerQuestion(side) {
   answers[currentQuestion] = side;
   currentQuestion++;
-
   if (currentQuestion >= QUESTIONS.length) {
     showResult();
   } else {
@@ -275,7 +248,6 @@ function answerQuestion(side) {
 // ======= 结果计算 =======
 function showResult() {
   var scores = { E: 0, I: 0, N: 0, S: 0, T: 0, F: 0, J: 0, P: 0 };
-
   for (var i = 0; i < QUESTIONS.length; i++) {
     var q = QUESTIONS[i];
     var side = answers[i];
@@ -283,14 +255,12 @@ function showResult() {
     var code = side === 'left' ? dim.leftCode : dim.rightCode;
     scores[code]++;
   }
-
   var typeStr = '';
   var dimKeys = ['EI', 'NS', 'TF', 'JP'];
-  for (var i = 0; i < dimKeys.length; i++) {
+  for (var i = 0; i < 4; i++) {
     var d = DIM_MAP[dimKeys[i]];
     typeStr += scores[d.leftCode] >= scores[d.rightCode] ? d.leftCode : d.rightCode;
   }
-
   saveToHash(scores);
   renderResult(typeStr, scores);
 }
@@ -315,16 +285,15 @@ function renderResult(typeStr, scores) {
   $('result-desc').textContent = customDesc;
 
   var dims = [
-    { id: 'dim-ei', left: scores.E, right: scores.I },
-    { id: 'dim-ns', left: scores.N, right: scores.S },
-    { id: 'dim-tf', left: scores.T, right: scores.F },
-    { id: 'dim-jp', left: scores.J, right: scores.P }
+    { id: 'dim-ei', l: scores.E, r: scores.I },
+    { id: 'dim-ns', l: scores.N, r: scores.S },
+    { id: 'dim-tf', l: scores.T, r: scores.F },
+    { id: 'dim-jp', l: scores.J, r: scores.P }
   ];
   for (var i = 0; i < dims.length; i++) {
     var d = dims[i];
-    var total = d.left + d.right || 1;
-    var pct = (d.left / total) * 100;
-    $(d.id).style.width = pct + '%';
+    var total = d.l + d.r || 1;
+    $(d.id).style.width = (d.l / total * 100) + '%';
   }
 
   showPage('result');
@@ -337,25 +306,19 @@ async function renderAdminList() {
 
   var usage = await CustomStorage.getUsage();
   var usageMB = (usage / 1024 / 1024).toFixed(1);
-  var limitMB = 50;
-  var pct = Math.min(100, (usage / (limitMB * 1024 * 1024)) * 100);
+  var pct = Math.min(100, (usage / (5 * 1024 * 1024)) * 100);
   var storageInfo = document.createElement('div');
   storageInfo.style.cssText = 'background:rgba(255,255,255,0.15);border-radius:10px;padding:12px;margin-bottom:16px;color:white;';
-  storageInfo.innerHTML = '\
-    <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;">\
-      <span>存储空间 (IndexedDB)</span>\
-      <span>' + usageMB + 'MB / ' + limitMB + 'MB</span>\
-    </div>\
-    <div style="width:100%;height:6px;background:rgba(255,255,255,0.2);border-radius:3px;overflow:hidden;">\
-      <div style="width:' + pct + '%;height:100%;background:' + (pct > 80 ? '#f44336' : '#4CAF50') + ';border-radius:3px;transition:width 0.3s;"></div>\
-    </div>';
+  storageInfo.innerHTML = '<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;">'
+    + '<span>存储空间 (localStorage)</span><span>' + usageMB + 'MB / 5MB</span></div>'
+    + '<div style="width:100%;height:6px;background:rgba(255,255,255,0.2);border-radius:3px;overflow:hidden;">'
+    + '<div style="width:' + pct + '%;height:100%;background:' + (pct > 80 ? '#f44336' : '#4CAF50') + ';border-radius:3px;transition:width 0.3s;"></div></div>';
   container.appendChild(storageInfo);
 
   var ioDiv = document.createElement('div');
   ioDiv.style.cssText = 'display:flex;gap:8px;margin-bottom:12px;';
-  ioDiv.innerHTML = '\
-    <button id="export-btn" style="flex:1;padding:10px;background:#4CAF50;color:white;border:none;border-radius:8px;font-size:14px;cursor:pointer;">📤 导出数据</button>\
-    <button id="import-btn" style="flex:1;padding:10px;background:#FF9800;color:white;border:none;border-radius:8px;font-size:14px;cursor:pointer;">📥 导入数据</button>';
+  ioDiv.innerHTML = '<button id="export-btn" style="flex:1;padding:10px;background:#4CAF50;color:white;border:none;border-radius:8px;font-size:14px;cursor:pointer;">📤 导出数据</button>'
+    + '<button id="import-btn" style="flex:1;padding:10px;background:#FF9800;color:white;border:none;border-radius:8px;font-size:14px;cursor:pointer;">📥 导入数据</button>';
   container.appendChild(ioDiv);
   $('export-btn').addEventListener('click', exportData);
   $('import-btn').addEventListener('click', importData);
@@ -363,75 +326,64 @@ async function renderAdminList() {
   var allCodes = Object.keys(TYPE_DATA);
   for (var ci = 0; ci < allCodes.length; ci++) {
     (function(code) {
-    var info = TYPE_DATA[code];
-    var saved = CustomStorage.getTypeData(code);
-    var imgSrc = saved.image || null;
+      var info = TYPE_DATA[code];
+      var saved = CustomStorage.getTypeData(code);
+      var imgSrc = saved.image || null;
 
-    var card = document.createElement('div');
-    card.className = 'admin-card';
+      var card = document.createElement('div');
+      card.className = 'admin-card';
 
-    card.innerHTML = '\
-      <div class="type-code">' + code + '</div>\
-      <div class="preview-img" data-code="' + code + '" style="position:relative;">\
-        ' + (imgSrc ? '<img src="' + imgSrc + '">' : '📷') + '\
-      </div>\
-      <div class="admin-fields">\
-        <input class="admin-name" data-code="' + code + '" value="' + (saved.name || info.name) + '" placeholder="奶龙名字">\
-        <textarea class="admin-desc" data-code="' + code + '" placeholder="描述文字...">' + (saved.desc || info.desc) + '</textarea>\
-        ' + (imgSrc ? '<button class="clear-img-btn" data-code="' + code + '">删除图片</button>' : '') + '\
-      </div>';
+      card.innerHTML = '<div class="type-code">' + code + '</div>'
+        + '<div class="preview-img" style="position:relative;">'
+        + (imgSrc ? '<img src="' + imgSrc + '">' : '📷')
+        + '</div>'
+        + '<div class="admin-fields">'
+        + '<input class="admin-name" value="' + (saved.name || info.name) + '" placeholder="奶龙名字">'
+        + '<textarea class="admin-desc" placeholder="描述文字...">' + (saved.desc || info.desc) + '</textarea>'
+        + (imgSrc ? '<button class="clear-img-btn">删除图片</button>' : '')
+        + '</div>';
 
-    var preview = card.querySelector('.preview-img');
-    preview.addEventListener('click', function() {
-      var input = document.createElement('input');
-      input.type = 'file';
-      input.accept = 'image/*';
-      input.addEventListener('change', function(e) {
-        var file = e.target.files[0];
-        if (!file) return;
-        if (file.size > 5 * 1024 * 1024) {
-          alert('图片太大了！请选择 5MB 以内的图片。');
-          return;
-        }
-        compressImage(file, 150, 70, async function(dataUrl) {
-          await CustomStorage.saveImage(code, dataUrl);
-          renderAdminList();
+      card.querySelector('.preview-img').addEventListener('click', function() {
+        var input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.addEventListener('change', function(e) {
+          var file = e.target.files[0];
+          if (!file) return;
+          if (file.size > 5 * 1024 * 1024) { alert('图片太大了！请选择 5MB 以内的图片。'); return; }
+          compressImage(file, 150, 70, function(dataUrl) {
+            CustomStorage.saveImage(code, dataUrl).then(function() { renderAdminList(); });
+          });
         });
+        input.click();
       });
-      input.click();
-    });
 
-    var nameInput = card.querySelector('.admin-name');
-    nameInput.addEventListener('change', function() {
-      CustomStorage.saveName(code, nameInput.value);
-    });
-
-    var descInput = card.querySelector('.admin-desc');
-    descInput.addEventListener('change', function() {
-      CustomStorage.saveDesc(code, descInput.value);
-    });
-
-    var clearBtn = card.querySelector('.clear-img-btn');
-    if (clearBtn) {
-      clearBtn.addEventListener('click', function() {
-        CustomStorage.deleteImage(code);
-        renderAdminList();
+      card.querySelector('.admin-name').addEventListener('change', function() {
+        CustomStorage.saveName(code, this.value);
       });
-    }
 
-    container.appendChild(card);
+      card.querySelector('.admin-desc').addEventListener('change', function() {
+        CustomStorage.saveDesc(code, this.value);
+      });
+
+      var clearBtn = card.querySelector('.clear-img-btn');
+      if (clearBtn) {
+        clearBtn.addEventListener('click', function() {
+          CustomStorage.deleteImage(code).then(function() { renderAdminList(); });
+        });
+      }
+
+      container.appendChild(card);
     })(allCodes[ci]);
   }
 }
 
 // ======= 导出/导入工具 =======
-async function exportData() {
-  var allTypes = Object.keys(TYPE_DATA);
+function exportData() {
   var data = {};
-  for (var i = 0; i < allTypes.length; i++) {
-    var code = allTypes[i];
-    var saved = CustomStorage.getTypeData(code);
-    if (saved.image || saved.name || (saved.desc && saved.desc !== TYPE_DATA[code].desc)) {
+  for (var code in _cache) {
+    var saved = _cache[code];
+    if (saved.image || saved.name || saved.desc) {
       data[code] = saved;
     }
   }
@@ -441,26 +393,31 @@ async function exportData() {
   a.href = url; a.download = 'nailong-ti-backup.json';
   document.body.appendChild(a); a.click();
   document.body.removeChild(a); URL.revokeObjectURL(url);
-  alert('✅ 数据已导出，请打开线上网页导入');
+  alert('✅ 数据已导出');
 }
 
-async function importData() {
+function importData() {
   var input = document.createElement('input');
   input.type = 'file'; input.accept = '.json';
-  input.addEventListener('change', async function(e) {
+  input.addEventListener('change', function(e) {
     var file = e.target.files[0];
     if (!file) return;
-    var text = await file.text();
-    var data = JSON.parse(text);
-    var count = 0;
-    for (var code in data) {
-      var saved = data[code];
-      if (saved.image) { await CustomStorage.saveImage(code, saved.image); count++; }
-      if (saved.name) { await CustomStorage.saveName(code, saved.name); }
-      if (saved.desc) { await CustomStorage.saveDesc(code, saved.desc); }
-    }
-    renderAdminList();
-    alert('✅ 导入完成！已导入 ' + count + ' 张图片');
+    var reader = new FileReader();
+    reader.onload = function(ev) {
+      try {
+        var data = JSON.parse(ev.target.result);
+        var count = 0;
+        for (var code in data) {
+          var saved = data[code];
+          if (saved.image) { CustomStorage.saveImage(code, saved.image); count++; }
+          if (saved.name) { CustomStorage.saveName(code, saved.name); }
+          if (saved.desc) { CustomStorage.saveDesc(code, saved.desc); }
+        }
+        renderAdminList();
+        alert('✅ 导入完成！已导入 ' + count + ' 张图片');
+      } catch (err) { alert('导入失败：文件格式错误'); }
+    };
+    reader.readAsText(file);
   });
   input.click();
 }
