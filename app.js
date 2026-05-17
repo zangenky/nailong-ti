@@ -144,11 +144,17 @@ var CustomStorage = {
 
 // ======= URL Hash 持久化（微信浏览器防刷新丢失） =======
 function saveToHash(scores) {
-  var s = scores;
-  var parts = ['EI', 'NS', 'TF', 'JP'].map(function(d) {
-    return s[DIM_MAP[d].leftCode] + ',' + s[DIM_MAP[d].rightCode];
-  });
-  try { window.location.hash = 'r=' + parts.join('|'); } catch (e) {}
+  try {
+    var s = scores;
+    var parts = ['EI', 'NS', 'TF', 'JP'].map(function(d) {
+      return s[DIM_MAP[d].leftCode] + ',' + s[DIM_MAP[d].rightCode];
+    });
+    if (window.history && window.history.replaceState) {
+      window.history.replaceState(null, '', '#r=' + parts.join('|'));
+    } else {
+      window.location.hash = 'r=' + parts.join('|');
+    }
+  } catch (e) {}
 }
 
 function loadFromHash() {
@@ -298,27 +304,32 @@ function answerQuestion(side) {
 
 // ======= 结果计算 =======
 function showResult() {
-  var qList = getQuestions();
-  var scores = { E: 0, I: 0, N: 0, S: 0, T: 0, F: 0, J: 0, P: 0 };
-  for (var i = 0; i < qList.length; i++) {
-    var q = qList[i];
-    var side = answers[i];
-    var dim = DIM_MAP[q.dim];
-    if (side === 'left') {
-      scores[dim.leftCode]++;
-    } else if (side === 'right') {
-      scores[dim.rightCode]++;
+  try {
+    var qList = getQuestions();
+    var scores = { E: 0, I: 0, N: 0, S: 0, T: 0, F: 0, J: 0, P: 0 };
+    for (var i = 0; i < qList.length; i++) {
+      var q = qList[i];
+      var side = answers[i];
+      var dim = DIM_MAP[q.dim];
+      if (side === 'left') {
+        scores[dim.leftCode]++;
+      } else if (side === 'right') {
+        scores[dim.rightCode]++;
+      }
+      // neutral: 不计分
     }
-    // neutral: 不计分
+    var typeStr = '';
+    var dimKeys = ['EI', 'NS', 'TF', 'JP'];
+    for (var i = 0; i < 4; i++) {
+      var d = DIM_MAP[dimKeys[i]];
+      typeStr += scores[d.leftCode] >= scores[d.rightCode] ? d.leftCode : d.rightCode;
+    }
+    renderResult(typeStr, scores);
+    // 延迟保存 hash，避免在微信 X5 浏览器中干扰渲染
+    setTimeout(function() { saveToHash(scores); }, 100);
+  } catch (e) {
+    alert('计算出错：' + e.message + '\\n请截图发给管理员');
   }
-  var typeStr = '';
-  var dimKeys = ['EI', 'NS', 'TF', 'JP'];
-  for (var i = 0; i < 4; i++) {
-    var d = DIM_MAP[dimKeys[i]];
-    typeStr += scores[d.leftCode] >= scores[d.rightCode] ? d.leftCode : d.rightCode;
-  }
-  renderResult(typeStr, scores);
-  saveToHash(scores);
 }
 
 function renderResult(typeStr, scores) {
