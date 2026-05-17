@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OG 分享效果预览</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    background: #f5f5f5;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 40px 20px;
+  }
+  h2 { color: #333; margin-bottom: 20px; font-size: 16px; }
+  .phone-frame {
+    width: 375px;
+    background: #fff;
+    border-radius: 20px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+    overflow: hidden;
+    position: relative;
+  }
+  .wechat-header {
+    background: #ededed;
+    padding: 10px 16px;
+    font-size: 14px;
+    color: #333;
+    font-weight: 500;
+    border-bottom: 1px solid #d9d9d9;
+  }
+  .wechat-chat {
+    padding: 16px;
+    background: #f7f7f7;
+    min-height: 200px;
+  }
+  .message {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    margin-bottom: 16px;
+  }
+  .avatar {
+    width: 36px; height: 36px;
+    border-radius: 4px;
+    background: #07c160;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 12px;
+    margin-bottom: 6px;
+  }
+  .share-card {
+    max-width: 280px;
+    background: #fff;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    margin-left: 46px;
+  }
+  .share-card img {
+    width: 100%;
+    height: 140px;
+    object-fit: cover;
+    display: block;
+    background: #eee;
+  }
+  .share-card .card-body {
+    padding: 10px 12px;
+    border-top: none;
+    position: relative;
+  }
+  .share-card .card-body .title {
+    font-size: 14px;
+    font-weight: 500;
+    color: #333;
+    line-height: 1.4;
+    margin-bottom: 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .share-card .card-body .desc {
+    font-size: 12px;
+    color: #999;
+    line-height: 1.4;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .share-card .card-body .source {
+    font-size: 11px;
+    color: #bbb;
+    margin-top: 4px;
+  }
+
+  /* 信息展示 */
+  .info-box {
+    max-width: 375px;
+    width: 100%;
+    margin-top: 24px;
+    background: #fff;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+  }
+  .info-box h3 { font-size: 14px; color: #666; margin-bottom: 12px; }
+  .info-row { display: flex; margin-bottom: 8px; font-size: 13px; }
+  .info-row .label { color: #999; width: 80px; flex-shrink: 0; }
+  .info-row .value { color: #333; word-break: break-all; }
+  .tag-good { color: #07c160; }
+  .tag-missing { color: #f44336; }
+</style>
+</head>
+<body>
+
+  <div class="phone-frame">
+    <div class="wechat-header">微信</div>
+    <div class="wechat-chat">
+      <div class="message">
+        <div class="avatar">朋友</div>
+        <div class="share-card">
+          <img src="https://zangenky.github.io/nailong-ti/home-logo.png" alt="preview"
+               onerror="this.style.display='none'">
+          <div class="card-body">
+            <div class="title">奶龙-TI 人格测试</div>
+            <div class="desc">测测你是哪种奶龙？</div>
+            <div class="source">链接</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="info-box">
+    <h3>当前 OG 标签</h3>
+    <div class="info-row"><span class="label">标题:</span><span class="value">奶龙-TI 人格测试</span></div>
+    <div class="info-row"><span class="label">描述:</span><span class="value">测测你是哪种奶龙？</span></div>
+    <div class="info-row"><span class="label">图片:</span><span class="value">home-logo.png <span class="tag-good">✓</span></span></div>
+    <div class="info-row"><span class="label">URL:</span><span class="value">zangenky.github.io/nailong-ti/</span></div>
+  </div>
+
+</body>
+</html>

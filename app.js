@@ -1,6 +1,19 @@
 // ======= 全局状态 =======
 var currentQuestion = 0;
 var answers = {};
+var currentAdminTab = 'types';
+
+// ======= 题目管理：优先返回自定义题目，否则返回默认 =======
+function getQuestions() {
+  try {
+    var saved = localStorage.getItem('nt-questions');
+    if (saved) {
+      var parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch (e) {}
+  return QUESTIONS;
+}
 
 // ======= 存储管理 (localStorage, 兼容微信X5) =======
 var _cache = {};
@@ -241,8 +254,9 @@ function startQuiz() {
 }
 
 function renderQuestion() {
-  var q = QUESTIONS[currentQuestion];
-  var total = QUESTIONS.length;
+  var qList = getQuestions();
+  var q = qList[currentQuestion];
+  var total = qList.length;
 
   $('progress-fill').style.width = ((currentQuestion + 1) / total * 100) + '%';
   $('progress-text').textContent = (currentQuestion + 1) + ' / ' + total;
@@ -268,7 +282,7 @@ function renderQuestion() {
 function answerQuestion(side) {
   answers[currentQuestion] = side;
   currentQuestion++;
-  if (currentQuestion >= QUESTIONS.length) {
+  if (currentQuestion >= getQuestions().length) {
     showResult();
   } else {
     renderQuestion();
@@ -277,9 +291,10 @@ function answerQuestion(side) {
 
 // ======= 结果计算 =======
 function showResult() {
+  var qList = getQuestions();
   var scores = { E: 0, I: 0, N: 0, S: 0, T: 0, F: 0, J: 0, P: 0 };
-  for (var i = 0; i < QUESTIONS.length; i++) {
-    var q = QUESTIONS[i];
+  for (var i = 0; i < qList.length; i++) {
+    var q = qList[i];
     var side = answers[i];
     var dim = DIM_MAP[q.dim];
     var code = side === 'left' ? dim.leftCode : dim.rightCode;
@@ -355,6 +370,28 @@ async function renderAdminList() {
   $('export-btn').addEventListener('click', exportData);
   $('import-btn').addEventListener('click', importData);
 
+  // ====== Tab 按钮 ======
+  var tabDiv = document.createElement('div');
+  tabDiv.style.cssText = 'display:flex;gap:8px;margin-bottom:12px;';
+  tabDiv.innerHTML = '<button id="admin-tab-types" class="admin-tab" data-tab="types" style="flex:1;padding:10px;border:none;border-radius:8px;font-size:14px;cursor:pointer;font-weight:' + (currentAdminTab === 'types' ? 'bold' : 'normal') + ';background:' + (currentAdminTab === 'types' ? '#667eea' : 'rgba(255,255,255,0.2)') + ';color:' + (currentAdminTab === 'types' ? 'white' : 'rgba(255,255,255,0.8)') + ';">类型管理</button>'
+    + '<button id="admin-tab-questions" class="admin-tab" data-tab="questions" style="flex:1;padding:10px;border:none;border-radius:8px;font-size:14px;cursor:pointer;font-weight:' + (currentAdminTab === 'questions' ? 'bold' : 'normal') + ';background:' + (currentAdminTab === 'questions' ? '#667eea' : 'rgba(255,255,255,0.2)') + ';color:' + (currentAdminTab === 'questions' ? 'white' : 'rgba(255,255,255,0.8)') + ';">题目管理</button>';
+  container.appendChild(tabDiv);
+
+  // Tab 切换事件
+  var tabBtns = tabDiv.querySelectorAll('.admin-tab');
+  for (var ti = 0; ti < tabBtns.length; ti++) {
+    tabBtns[ti].addEventListener('click', function() {
+      currentAdminTab = this.getAttribute('data-tab');
+      renderAdminList();
+    });
+  }
+
+  if (currentAdminTab === 'questions') {
+    renderQuestionEditor(container);
+    return;
+  }
+
+  // ====== 类型管理 ======
   var allCodes = Object.keys(TYPE_DATA);
   for (var ci = 0; ci < allCodes.length; ci++) {
     (function(code) {
@@ -408,6 +445,93 @@ async function renderAdminList() {
       container.appendChild(card);
     })(allCodes[ci]);
   }
+}
+
+// ======= 题目编辑器 =======
+function renderQuestionEditor(container) {
+  var qList = getQuestions();
+
+  // 构建维度下拉选项
+  var dimOptions = '';
+  for (var di = 0; di < DIMENSIONS.length; di++) {
+    var d = DIMENSIONS[di];
+    dimOptions += '<option value="' + d.key + '">' + d.left + '(' + d.leftCode + ') vs ' + d.right + '(' + d.rightCode + ')</option>';
+  }
+
+  for (var qi = 0; qi < qList.length; qi++) {
+    (function(idx) {
+      var q = qList[idx];
+      var card = document.createElement('div');
+      card.className = 'admin-card';
+      card.style.cssText = 'background:white;border-radius:12px;padding:16px;flex-direction:column;gap:6px;';
+
+      card.innerHTML = '<div style="font-weight:bold;color:#667eea;margin-bottom:2px;">第 ' + (idx + 1) + ' 题</div>'
+        + '<div style="display:flex;gap:8px;align-items:center;"><label style="font-size:13px;color:#888;width:36px;flex-shrink:0;">维度</label>'
+        + '<select class="q-dim" style="flex:1;padding:6px;border:1px solid #ddd;border-radius:6px;font-size:13px;">' + dimOptions + '</select></div>'
+        + '<div style="display:flex;gap:8px;align-items:flex-start;"><label style="font-size:13px;color:#888;width:36px;flex-shrink:0;padding-top:6px;">问题</label>'
+        + '<textarea class="q-text" style="flex:1;padding:6px;border:1px solid #ddd;border-radius:6px;font-size:13px;resize:vertical;height:36px;font-family:inherit;">' + htmlEncode(q.q) + '</textarea></div>'
+        + '<div style="display:flex;gap:8px;align-items:center;"><label style="font-size:13px;color:#888;width:36px;flex-shrink:0;">A</label>'
+        + '<input class="q-left" value="' + htmlEncode(q.left) + '" style="flex:1;padding:6px;border:1px solid #ddd;border-radius:6px;font-size:13px;"></div>'
+        + '<div style="display:flex;gap:8px;align-items:center;"><label style="font-size:13px;color:#888;width:36px;flex-shrink:0;">B</label>'
+        + '<input class="q-right" value="' + htmlEncode(q.right) + '" style="flex:1;padding:6px;border:1px solid #ddd;border-radius:6px;font-size:13px;"></div>';
+
+      // 设置下拉框当前值
+      card.querySelector('.q-dim').value = q.dim;
+
+      container.appendChild(card);
+    })(qi);
+  }
+
+  // 保存 + 恢复默认按钮
+  var btnDiv = document.createElement('div');
+  btnDiv.style.cssText = 'display:flex;gap:8px;margin-top:16px;';
+  btnDiv.innerHTML = '<button id="save-questions-btn" style="flex:1;padding:12px;background:#4CAF50;color:white;border:none;border-radius:8px;font-size:14px;cursor:pointer;">💾 保存题目</button>'
+    + '<button id="reset-questions-btn" style="flex:1;padding:12px;background:#f44336;color:white;border:none;border-radius:8px;font-size:14px;cursor:pointer;">↺ 恢复默认</button>';
+  container.appendChild(btnDiv);
+
+  $('save-questions-btn').addEventListener('click', function() {
+    var cards = container.querySelectorAll('.admin-card');
+    var newQuestions = [];
+    for (var j = 0; j < cards.length; j++) {
+      newQuestions.push({
+        dim: cards[j].querySelector('.q-dim').value,
+        q: cards[j].querySelector('.q-text').value,
+        left: cards[j].querySelector('.q-left').value,
+        right: cards[j].querySelector('.q-right').value
+      });
+    }
+    saveCustomQuestions(newQuestions);
+  });
+
+  $('reset-questions-btn').addEventListener('click', function() {
+    if (confirm('确定恢复默认题目吗？')) {
+      try { localStorage.removeItem('nt-questions'); } catch (e) {}
+      renderAdminList();
+    }
+  });
+}
+
+function saveCustomQuestions(qList) {
+  // 验证每个维度至少 1 题
+  var dims = {};
+  for (var i = 0; i < qList.length; i++) {
+    dims[qList[i].dim] = (dims[qList[i].dim] || 0) + 1;
+  }
+  for (var d in dims) {
+    if (dims[d] < 1) { alert('每个维度至少需要 1 道题！'); return; }
+  }
+
+  try {
+    localStorage.setItem('nt-questions', JSON.stringify(qList));
+    alert('✅ 题目已保存！');
+    renderAdminList();
+  } catch (e) {
+    alert('保存失败：' + e.message);
+  }
+}
+
+function htmlEncode(str) {
+  return String(str).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 // ======= 导出/导入工具 =======
