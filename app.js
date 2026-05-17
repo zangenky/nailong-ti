@@ -226,7 +226,7 @@ function initNavigation() {
     btns[i].addEventListener('click', function() {
       var page = this.getAttribute('data-page');
       showPage(page);
-      if (page === 'admin') { renderAdminList(); }
+      if (page === 'admin') { try { Promise.resolve(renderAdminList()).catch(function() {}); } catch (e) {} }
     });
   }
 }
