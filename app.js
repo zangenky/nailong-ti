@@ -126,15 +126,22 @@ const $ = id => document.getElementById(id);
 document.addEventListener('DOMContentLoaded', async () => {
   // 线上版通过 ?admin=1 参数显示管理按钮
   const isOnline = window.location.protocol !== 'file:';
-  const hasAdminParam = new URLSearchParams(window.location.search).get('admin') === '1';
-  if (isOnline && !hasAdminParam) {
-    const btn = document.getElementById('admin-nav-btn');
-    if (btn) btn.style.display = 'none';
+  try {
+    const hasAdminParam = new URLSearchParams(window.location.search).get('admin') === '1';
+    if (isOnline && !hasAdminParam) {
+      const btn = document.getElementById('admin-nav-btn');
+      if (btn) btn.style.display = 'none';
+    }
+  } catch (e) { /* ignore */ }
+  try {
+    await initStorage();
+  } catch (e) {
+    console.warn('存储初始化失败，继续以只读模式运行', e);
+    _cache = {};
   }
-  await initStorage();
   initNavigation();
   bindStartButton();
-  renderAdminList();
+  renderAdminList().catch(function(e) { /* ignore admin errors */ });
 });
 
 // ======= 导航 =======
