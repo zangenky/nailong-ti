@@ -42,8 +42,8 @@ function initStorage() {
             var item = items[idx];
             _cache[item.code] = item.data;
             // 如果图片太大，后台压缩（不阻塞）
-            if (item.data && item.data.image && dataUrlSize(item.data.image) > 25000) {
-              compressDataUrl(item.data.image, 150, 70, function(small) {
+            if (item.data && item.data.image && dataUrlSize(item.data.image) > 15000) {
+              compressDataUrl(item.data.image, 120, 60, function(small) {
                 item.data.image = small;
                 _cache[item.code] = item.data;
                 idx++; next();
@@ -89,9 +89,9 @@ var CustomStorage = {
 
   saveImage: function(code, dataUrl) {
     return new Promise(function(resolve) {
-      // 自动压缩过大的图片（>25KB 解码后）
-      if (dataUrlSize(dataUrl) > 25000) {
-        compressDataUrl(dataUrl, 150, 70, function(smallData) {
+      // 自动压缩过大的图片（>15KB 解码后）
+      if (dataUrlSize(dataUrl) > 15000) {
+        compressDataUrl(dataUrl, 120, 60, function(smallData) {
           saveData(code, { image: smallData });
           resolve();
         });
@@ -383,7 +383,7 @@ async function renderAdminList() {
           var file = e.target.files[0];
           if (!file) return;
           if (file.size > 5 * 1024 * 1024) { alert('图片太大了！请选择 5MB 以内的图片。'); return; }
-          compressImage(file, 150, 70, function(dataUrl) {
+          compressImage(file, 120, 60, function(dataUrl) {
             CustomStorage.saveImage(code, dataUrl).then(function() { renderAdminList(); });
           });
         });
@@ -438,36 +438,39 @@ function importData() {
     reader.onload = function(ev) {
       try {
         var data = JSON.parse(ev.target.result);
-        var total = 0;
-        for (var code in data) { if (data[code].image) total++; }
-        var done = 0;
-        var doImport = function() {
-          renderAdminList();
-          alert('✅ 导入完成！已导入 ' + done + ' 张图片');
-        };
-        for (var code in data) {
+        var codes = [];
+        for (var k in data) codes.push(k);
+        if (codes.length === 0) { renderAdminList(); alert('✅ 导入完成'); return; }
+        var idx = 0;
+        var total = codes.length;
+        var imgCount = 0;
+        var next = function() {
+          if (idx >= total) {
+            renderAdminList();
+            alert('✅ 导入完成！已导入 ' + imgCount + ' 张图片');
+            return;
+          }
+          var code = codes[idx];
           var saved = data[code];
+          var promises = [];
           if (saved.image) {
-            // 重新压缩旧大图，确保不超过存储限制
             (function(c, imgData) {
-              compressDataUrl(imgData, 150, 70, function(smallData) {
+              compressDataUrl(imgData, 120, 60, function(smallData) {
                 CustomStorage.saveImage(c, smallData).then(function() {
-                  done++;
+                  imgCount++;
                   if (saved.name) CustomStorage.saveName(c, saved.name);
                   if (saved.desc) CustomStorage.saveDesc(c, saved.desc);
-                  if (done >= total) doImport();
+                  idx++; next();
                 });
               });
             })(code, saved.image);
           } else {
             if (saved.name) CustomStorage.saveName(code, saved.name);
             if (saved.desc) CustomStorage.saveDesc(code, saved.desc);
-            done++;
-            if (done >= total) doImport();
+            idx++; next();
           }
-        }
-        // 容错：如果没有图片也没有文字，直接刷新
-        if (total === 0) { renderAdminList(); alert('✅ 导入完成'); }
+        };
+        next();
       } catch (err) { alert('导入失败：文件格式错误'); }
     };
     reader.readAsText(file);
@@ -493,6 +496,10 @@ function compressDataUrl(dataUrl, maxWidth, quality, callback) {
   var img = new Image();
   img.onload = function() {
     compressImgToDataUrl(img, maxWidth, quality, callback);
+  };
+  img.onerror = function() {
+    // 压缩失败时保留原图（可能是坏数据或CORS问题）
+    callback(dataUrl);
   };
   img.src = dataUrl;
 }
