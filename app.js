@@ -1,48 +1,130 @@
 // ======= 全局状态 =======
 let currentQuestion = 0;
 const answers = {};       // { "0": "left", "3": "right", ... }
-const CUSTOM_DATA_KEY = 'nailong-ti-custom';
 
-// ======= 存储管理 =======
+// ======= 存储管理 (IndexedDB, 更大空间) =======
+let _cache = {};
+
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('NailongTI', 1);
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains('types')) {
+        db.createObjectStore('types');
+      }
+    };
+    req.onsuccess = (e) => resolve(e.target.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function initStorage() {
+  const db = await openDB();
+  // 迁移旧 localStorage 数据
+  const oldData = localStorage.getItem('nailong-ti-custom');
+  let hasOldData = false;
+  if (oldData) {
+    const parsed = JSON.parse(oldData);
+    for (const [code, data] of Object.entries(parsed)) {
+      if (data.image || data.name || data.desc) {
+        const tx = db.transaction('types', 'readwrite');
+        tx.objectStore('types').put(data, code);
+        hasOldData = true;
+      }
+    }
+    localStorage.removeItem('nailong-ti-custom');
+  }
+  // 加载所有数据到内存缓存（同步访问）
+  const tx = db.transaction('types', 'readonly');
+  const all = tx.objectStore('types').getAll();
+  const keys = tx.objectStore('types').getAllKeys();
+  await Promise.all([new Promise(r => { all.onsuccess = () => r(); }),
+                     new Promise(r => { keys.onsuccess = () => r(); })]);
+  _cache = {};
+  for (let i = 0; i < (keys.result || []).length; i++) {
+    _cache[keys.result[i]] = all.result[i];
+  }
+  if (hasOldData) renderAdminList();
+}
+
+function dbWrite(code, data) {
+  return new Promise((resolve) => {
+    const req = indexedDB.open('NailongTI', 1);
+    req.onsuccess = (e) => {
+      const db = e.target.result;
+      const tx = db.transaction('types', 'readwrite');
+      tx.objectStore('types').put(data, code);
+      tx.oncomplete = () => { db.close(); resolve(); };
+    };
+  });
+}
+
+function dbDeleteKey(code) {
+  return new Promise((resolve) => {
+    const req = indexedDB.open('NailongTI', 1);
+    req.onsuccess = (e) => {
+      const db = e.target.result;
+      const tx = db.transaction('types', 'readwrite');
+      tx.objectStore('types').delete(code);
+      tx.oncomplete = () => { db.close(); resolve(); };
+    };
+  });
+}
+
 const CustomStorage = {
-  get() {
-    const data = localStorage.getItem(CUSTOM_DATA_KEY);
-    return data ? JSON.parse(data) : {};
+  getCache() { return _cache; },
+  getTypeData(code) { return _cache[code] || {}; },
+
+  async saveImage(code, dataUrl) {
+    const existing = _cache[code] || {};
+    existing.image = dataUrl;
+    _cache[code] = existing;
+    await dbWrite(code, existing);
   },
-  save(data) {
-    localStorage.setItem(CUSTOM_DATA_KEY, JSON.stringify(data));
+
+  async saveName(code, name) {
+    const existing = _cache[code] || {};
+    existing.name = name;
+    _cache[code] = existing;
+    await dbWrite(code, existing);
   },
-  getUsage() {
+
+  async saveDesc(code, desc) {
+    const existing = _cache[code] || {};
+    existing.desc = desc;
+    _cache[code] = existing;
+    await dbWrite(code, existing);
+  },
+
+  async deleteImage(code) {
+    const existing = _cache[code];
+    if (existing) {
+      delete existing.image;
+      if (Object.keys(existing).length === 0) {
+        delete _cache[code];
+        await dbDeleteKey(code);
+      } else {
+        _cache[code] = existing;
+        await dbWrite(code, existing);
+      }
+    }
+  },
+
+  async getUsage() {
     let total = 0;
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      total += localStorage.getItem(key).length * 2; // UTF-16
+    for (const val of Object.values(_cache)) {
+      total += JSON.stringify(val).length * 2;
     }
     return total;
-  },
-  getImage(typeCode) {
-    const all = this.get();
-    return all[typeCode]?.image || null;
-  },
-  getName(typeCode) {
-    const all = this.get();
-    return all[typeCode]?.name || null;
-  },
-  getDesc(typeCode) {
-    const all = this.get();
-    return all[typeCode]?.desc || null;
-  },
-  setTypeData(typeCode, data) {
-    const all = this.get();
-    all[typeCode] = { ...(all[typeCode] || {}), ...data };
-    this.save(all);
   }
 };
 
 // ======= DOM =======
 const $ = id => document.getElementById(id);
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+  await initStorage();
   initNavigation();
   bindStartButton();
   renderAdminList();
@@ -156,13 +238,11 @@ function showResult() {
 }
 
 function renderResult(typeStr, scores) {
-  // 检测是否已上传图片
-  const custom = CustomStorage.get();
-  const imgData = custom[typeStr]?.image || null;
-
   const typeInfo = TYPE_DATA[typeStr] || { name: '未知', desc: '暂无描述', color: '#999' };
-  const customName = CustomStorage.getName(typeStr) || typeInfo.name;
-  const customDesc = CustomStorage.getDesc(typeStr) || typeInfo.desc;
+  const saved = CustomStorage.getTypeData(typeStr);
+  const imgData = saved.image || null;
+  const customName = saved.name || typeInfo.name;
+  const customDesc = saved.desc || typeInfo.desc;
 
   $('result-type').textContent = typeStr;
   $('result-dragon-name').textContent = `也就是 "${customName}"`;
@@ -198,29 +278,28 @@ function renderAdminList() {
   container.innerHTML = '';
 
   // 显示存储用量
-  const usage = CustomStorage.getUsage();
-  const usageMB = (usage / 1024 / 1024).toFixed(1);
-  const limitMB = 5;
-  const pct = Math.min(100, (usage / (limitMB * 1024 * 1024)) * 100);
-  const storageInfo = document.createElement('div');
-  storageInfo.style.cssText = 'background:rgba(255,255,255,0.15);border-radius:10px;padding:12px;margin-bottom:16px;color:white;';
-  storageInfo.innerHTML = `
-    <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;">
-      <span>存储空间</span>
-      <span>${usageMB}MB / ${limitMB}MB</span>
-    </div>
-    <div style="width:100%;height:6px;background:rgba(255,255,255,0.2);border-radius:3px;overflow:hidden;">
-      <div style="width:${pct}%;height:100%;background:${pct > 80 ? '#f44336' : '#4CAF50'};border-radius:3px;transition:width 0.3s;"></div>
-    </div>
-    ${pct > 70 ? '<div style="font-size:12px;margin-top:4px;color:#FFD700;">⚠️ 空间不足时请删除不需要的图片或使用更小的图片</div>' : ''}
-  `;
-  container.appendChild(storageInfo);
+  CustomStorage.getUsage().then(usage => {
+    const usageMB = (usage / 1024 / 1024).toFixed(1);
+    const limitMB = 50;
+    const pct = Math.min(100, (usage / (limitMB * 1024 * 1024)) * 100);
+    const storageInfo = document.createElement('div');
+    storageInfo.style.cssText = 'background:rgba(255,255,255,0.15);border-radius:10px;padding:12px;margin-bottom:16px;color:white;';
+    storageInfo.innerHTML = `
+      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;">
+        <span>存储空间 (IndexedDB)</span>
+        <span>${usageMB}MB / ${limitMB}MB</span>
+      </div>
+      <div style="width:100%;height:6px;background:rgba(255,255,255,0.2);border-radius:3px;overflow:hidden;">
+        <div style="width:${pct}%;height:100%;background:${pct > 80 ? '#f44336' : '#4CAF50'};border-radius:3px;transition:width 0.3s;"></div>
+      </div>
+    `;
+    container.appendChild(storageInfo);
+  });
 
   const allCodes = Object.keys(TYPE_DATA);
   allCodes.forEach(code => {
     const info = TYPE_DATA[code];
-    const custom = CustomStorage.get();
-    const saved = custom[code] || {};
+    const saved = CustomStorage.getTypeData(code);
     const imgSrc = saved.image || null;
 
     const card = document.createElement('div');
@@ -251,14 +330,9 @@ function renderAdminList() {
           alert('图片太大了！请选择 5MB 以内的图片。');
           return;
         }
-        compressImage(file, 150, 70, (dataUrl) => {
-          try {
-            CustomStorage.setTypeData(code, { image: dataUrl });
-            renderAdminList();
-          } catch (err) {
-            alert('存储空间不足，请使用更小的图片。');
-            console.error(err);
-          }
+        compressImage(file, 150, 70, async (dataUrl) => {
+          await CustomStorage.saveImage(code, dataUrl);
+          renderAdminList();
         });
       });
       input.click();
@@ -267,22 +341,20 @@ function renderAdminList() {
     // 名字变更
     const nameInput = card.querySelector('.admin-name');
     nameInput.addEventListener('change', () => {
-      CustomStorage.setTypeData(code, { name: nameInput.value });
+      CustomStorage.saveName(code, nameInput.value);
     });
 
     // 描述变更
     const descInput = card.querySelector('.admin-desc');
     descInput.addEventListener('change', () => {
-      CustomStorage.setTypeData(code, { desc: descInput.value });
+      CustomStorage.saveDesc(code, descInput.value);
     });
 
     // 删除图片
     const clearBtn = card.querySelector('.clear-img-btn');
     if (clearBtn) {
       clearBtn.addEventListener('click', () => {
-        const data = CustomStorage.get();
-        if (data[code]) delete data[code].image;
-        CustomStorage.save(data);
+        CustomStorage.deleteImage(code);
         renderAdminList();
       });
     }
