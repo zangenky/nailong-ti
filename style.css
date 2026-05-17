@@ -23,7 +23,7 @@ body {
   padding-top: 60px; text-align: center;
 }
 .logo-area { margin-bottom: 24px; }
-.logo-icon { font-size: 80px; margin-bottom: 8px; }
+.logo-img { width: 200px; height: auto; margin-bottom: 8px; border-radius: 12px; }
 .logo-area h1 {
   font-size: 36px; color: white; text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
   letter-spacing: 4px;
