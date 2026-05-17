@@ -26,12 +26,33 @@ function initStorage() {
         var all = tx.objectStore('types').getAll();
         var keys = tx.objectStore('types').getAllKeys();
         var finish = function() {
+          var items = [];
           for (var i = 0; i < (keys.result || []).length; i++) {
-            _cache[keys.result[i]] = all.result[i];
+            items.push({ code: keys.result[i], data: all.result[i] });
           }
-          syncToLocal();
-          db.close();
-          done();
+          // 异步压缩旧大图
+          var idx = 0;
+          var next = function() {
+            if (idx >= items.length) {
+              syncToLocal();
+              db.close();
+              done();
+              return;
+            }
+            var item = items[idx];
+            _cache[item.code] = item.data;
+            // 如果图片太大，后台压缩（不阻塞）
+            if (item.data && item.data.image && dataUrlSize(item.data.image) > 25000) {
+              compressDataUrl(item.data.image, 150, 70, function(small) {
+                item.data.image = small;
+                _cache[item.code] = item.data;
+                idx++; next();
+              });
+            } else {
+              idx++; next();
+            }
+          };
+          next();
         };
         all.onsuccess = function() {
           keys.onsuccess = function() { finish(); };
@@ -67,8 +88,17 @@ var CustomStorage = {
   getTypeData: function(code) { return _cache[code] || {}; },
 
   saveImage: function(code, dataUrl) {
-    return Promise.resolve().then(function() {
-      saveData(code, { image: dataUrl });
+    return new Promise(function(resolve) {
+      // 自动压缩过大的图片（>25KB 解码后）
+      if (dataUrlSize(dataUrl) > 25000) {
+        compressDataUrl(dataUrl, 150, 70, function(smallData) {
+          saveData(code, { image: smallData });
+          resolve();
+        });
+      } else {
+        saveData(code, { image: dataUrl });
+        resolve();
+      }
     });
   },
 
@@ -308,11 +338,13 @@ async function renderAdminList() {
   var usageMB = (usage / 1024 / 1024).toFixed(1);
   var pct = Math.min(100, (usage / (5 * 1024 * 1024)) * 100);
   var storageInfo = document.createElement('div');
+  var warnColor = pct > 90 ? '#f44336' : (pct > 70 ? '#FF9800' : '#4CAF50');
   storageInfo.style.cssText = 'background:rgba(255,255,255,0.15);border-radius:10px;padding:12px;margin-bottom:16px;color:white;';
   storageInfo.innerHTML = '<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;">'
     + '<span>存储空间 (localStorage)</span><span>' + usageMB + 'MB / 5MB</span></div>'
     + '<div style="width:100%;height:6px;background:rgba(255,255,255,0.2);border-radius:3px;overflow:hidden;">'
-    + '<div style="width:' + pct + '%;height:100%;background:' + (pct > 80 ? '#f44336' : '#4CAF50') + ';border-radius:3px;transition:width 0.3s;"></div></div>';
+    + '<div style="width:' + pct + '%;height:100%;background:' + warnColor + ';border-radius:3px;transition:width 0.3s;"></div></div>'
+    + (pct > 80 ? '<div style="font-size:12px;color:#ffcdd2;margin-top:4px;">⚠️ 存储空间不足，部分图片可能无法保存。请重新导出后导入以压缩图片。</div>' : '');
   container.appendChild(storageInfo);
 
   var ioDiv = document.createElement('div');
@@ -406,15 +438,36 @@ function importData() {
     reader.onload = function(ev) {
       try {
         var data = JSON.parse(ev.target.result);
-        var count = 0;
+        var total = 0;
+        for (var code in data) { if (data[code].image) total++; }
+        var done = 0;
+        var doImport = function() {
+          renderAdminList();
+          alert('✅ 导入完成！已导入 ' + done + ' 张图片');
+        };
         for (var code in data) {
           var saved = data[code];
-          if (saved.image) { CustomStorage.saveImage(code, saved.image); count++; }
-          if (saved.name) { CustomStorage.saveName(code, saved.name); }
-          if (saved.desc) { CustomStorage.saveDesc(code, saved.desc); }
+          if (saved.image) {
+            // 重新压缩旧大图，确保不超过存储限制
+            (function(c, imgData) {
+              compressDataUrl(imgData, 150, 70, function(smallData) {
+                CustomStorage.saveImage(c, smallData).then(function() {
+                  done++;
+                  if (saved.name) CustomStorage.saveName(c, saved.name);
+                  if (saved.desc) CustomStorage.saveDesc(c, saved.desc);
+                  if (done >= total) doImport();
+                });
+              });
+            })(code, saved.image);
+          } else {
+            if (saved.name) CustomStorage.saveName(code, saved.name);
+            if (saved.desc) CustomStorage.saveDesc(code, saved.desc);
+            done++;
+            if (done >= total) doImport();
+          }
         }
-        renderAdminList();
-        alert('✅ 导入完成！已导入 ' + count + ' 张图片');
+        // 容错：如果没有图片也没有文字，直接刷新
+        if (total === 0) { renderAdminList(); alert('✅ 导入完成'); }
       } catch (err) { alert('导入失败：文件格式错误'); }
     };
     reader.readAsText(file);
@@ -428,15 +481,33 @@ function compressImage(file, maxWidth, quality, callback) {
   reader.onload = function(e) {
     var img = new Image();
     img.onload = function() {
-      var canvas = document.createElement('canvas');
-      var w = img.width, h = img.height;
-      if (w > maxWidth) { h = h * maxWidth / w; w = maxWidth; }
-      canvas.width = w; canvas.height = h;
-      var ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, w, h);
-      callback(canvas.toDataURL('image/jpeg', quality));
+      compressImgToDataUrl(img, maxWidth, quality, callback);
     };
     img.src = e.target.result;
   };
   reader.readAsDataURL(file);
+}
+
+// 压缩已有 data URL（用于导入时重新压缩旧大图）
+function compressDataUrl(dataUrl, maxWidth, quality, callback) {
+  var img = new Image();
+  img.onload = function() {
+    compressImgToDataUrl(img, maxWidth, quality, callback);
+  };
+  img.src = dataUrl;
+}
+
+function compressImgToDataUrl(img, maxWidth, quality, callback) {
+  var canvas = document.createElement('canvas');
+  var w = img.width, h = img.height;
+  if (w > maxWidth) { h = h * maxWidth / w; w = maxWidth; }
+  canvas.width = w; canvas.height = h;
+  var ctx = canvas.getContext('2d');
+  ctx.drawImage(img, 0, 0, w, h);
+  callback(canvas.toDataURL('image/jpeg', quality));
+}
+
+// 估算 data URL 的解码后字节数
+function dataUrlSize(dataUrl) {
+  try { return Math.round(atob(dataUrl.split(',')[1]).length); } catch (e) { return 0; }
 }
