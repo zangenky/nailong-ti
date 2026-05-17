@@ -4,6 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>奶龙-TI 人格测试</title>
+<meta property="og:title" content="奶龙-TI 人格测试">
+<meta property="og:description" content="测测你是哪种奶龙？">
+<meta property="og:image" content="https://zangenky.github.io/nailong-ti/home-logo.png">
+<meta property="og:image:width" content="400">
+<meta property="og:image:height" content="400">
+<meta property="og:url" content="https://zangenky.github.io/nailong-ti/">
+<meta property="og:type" content="website">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -18,13 +25,7 @@
         <p class="subtitle">测测你是哪种奶龙？</p>
       </div>
       <div class="home-desc">
-        <p>通过 4 个维度，16 道题<br>找到专属于你的奶龙人格</p>
-        <div class="dimension-preview">
-          <span>🎨 抽象 vs 正经</span>
-          <span>💭 直觉 vs 实感</span>
-          <span>🧠 理性 vs 感性</span>
-          <span>📋 计划 vs 随性</span>
-        </div>
+        <p style="font-size:13px;color:#999;text-align:center;margin:0;">本测试纯属娱乐，切勿当真</p>
       </div>
       <button id="start-btn" class="primary-btn">开始测试 →</button>
     </div>
@@ -38,7 +39,6 @@
       </div>
       <div id="progress-text" class="progress-text">1 / 16</div>
     </div>
-    <div id="dimension-tag" class="dimension-tag"></div>
     <h2 id="question-text" class="question-text"></h2>
     <div id="options-container" class="options-container"></div>
   </div>
@@ -46,9 +46,8 @@
   <!-- 结果页 -->
   <div id="page-result" class="page">
     <div class="result-content">
-      <div class="result-label">你的奶龙-TI 类型</div>
-      <div id="result-type" class="result-type">ENFP</div>
-      <div id="result-dragon-name" class="result-dragon-name">奶察</div>
+      <div id="result-type" class="result-type" style="display:none;">ENTJ</div>
+      <div id="result-dragon-name" class="result-dragon-name">奶机</div>
       <div id="result-image" class="result-image">
         <div class="image-placeholder">🐉</div>
       </div>
@@ -101,7 +100,7 @@
 
 <div class="nav-bar">
   <button class="nav-btn" data-page="home">🏠 首页</button>
-  <button class="nav-btn" data-page="admin">🛠 管理</button>
+  <button id="admin-nav-btn" class="nav-btn" data-page="admin">🛠 管理</button>
 </div>
 
 <script src="data.js"></script>

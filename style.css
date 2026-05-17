@@ -72,11 +72,6 @@ body {
 }
 .progress-text { font-size: 13px; color: rgba(255,255,255,0.8); text-align: right; }
 
-.dimension-tag {
-  display: inline-block; padding: 4px 14px; border-radius: 20px;
-  background: rgba(255,255,255,0.2); color: white;
-  font-size: 13px; margin-bottom: 12px;
-}
 
 .question-text {
   font-size: 20px; color: white; line-height: 1.5;
@@ -111,7 +106,7 @@ body {
 .result-label { font-size: 14px; color: #999; margin-bottom: 4px; }
 .result-type { font-size: 42px; font-weight: bold; color: #667eea; letter-spacing: 6px; }
 .result-dragon-name {
-  font-size: 24px; color: #FF8C00; font-weight: bold; margin: 8px 0 16px;
+  font-size: 36px; color: #FF8C00; font-weight: bold; margin: 4px 0 16px;
 }
 .result-image {
   width: 200px; height: 200px; margin: 0 auto 16px;

@@ -124,6 +124,11 @@ const CustomStorage = {
 const $ = id => document.getElementById(id);
 
 document.addEventListener('DOMContentLoaded', async () => {
+  // 线上版隐藏管理按钮
+  if (window.location.protocol !== 'file:') {
+    const btn = document.getElementById('admin-nav-btn');
+    if (btn) btn.style.display = 'none';
+  }
   await initStorage();
   initNavigation();
   bindStartButton();
@@ -179,9 +184,6 @@ function renderQuestion() {
 
   $('progress-fill').style.width = `${((currentQuestion + 1) / total) * 100}%`;
   $('progress-text').textContent = `${currentQuestion + 1} / ${total}`;
-
-  const dim = DIMENSIONS.find(d => d.key === q.dim);
-  $('dimension-tag').textContent = `${dim.left} vs ${dim.right}`;
 
   $('question-text').textContent = q.q;
 
@@ -245,7 +247,7 @@ function renderResult(typeStr, scores) {
   const customDesc = saved.desc || typeInfo.desc;
 
   $('result-type').textContent = typeStr;
-  $('result-dragon-name').textContent = `也就是 "${customName}"`;
+  $('result-dragon-name').textContent = customName;
 
   const imgContainer = $('result-image');
   if (imgData) {
