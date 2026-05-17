@@ -271,6 +271,12 @@ function renderQuestion() {
   leftBtn.addEventListener('click', function() { answerQuestion('left'); });
   container.appendChild(leftBtn);
 
+  var rightBtn = document.createElement('button');
+  rightBtn.className = 'option-btn';
+  rightBtn.innerHTML = '<span class="option-key">B</span> ' + q.right;
+  rightBtn.addEventListener('click', function() { answerQuestion('right'); });
+  container.appendChild(rightBtn);
+
   if (q.neutral) {
     var neutralBtn = document.createElement('button');
     neutralBtn.className = 'option-btn option-neutral';
@@ -278,12 +284,6 @@ function renderQuestion() {
     neutralBtn.addEventListener('click', function() { answerQuestion('neutral'); });
     container.appendChild(neutralBtn);
   }
-
-  var rightBtn = document.createElement('button');
-  rightBtn.className = 'option-btn';
-  rightBtn.innerHTML = '<span class="option-key">B</span> ' + q.right;
-  rightBtn.addEventListener('click', function() { answerQuestion('right'); });
-  container.appendChild(rightBtn);
 }
 
 function answerQuestion(side) {
