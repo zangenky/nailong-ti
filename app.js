@@ -120,6 +120,20 @@ const CustomStorage = {
   }
 };
 
+// ======= sessionStorage 持久化（微信浏览器防刷新丢失） =======
+function saveResultSession(typeStr, scores) {
+  try { sessionStorage.setItem('nt-result', JSON.stringify({ t: typeStr, s: scores })); } catch (e) {}
+}
+function loadResultSession() {
+  try {
+    var d = sessionStorage.getItem('nt-result');
+    return d ? JSON.parse(d) : null;
+  } catch (e) { return null; }
+}
+function clearResultSession() {
+  try { sessionStorage.removeItem('nt-result'); } catch (e) {}
+}
+
 // ======= DOM =======
 const $ = id => document.getElementById(id);
 
@@ -142,6 +156,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   initNavigation();
   bindStartButton();
   renderAdminList().catch(function(e) { /* ignore admin errors */ });
+
+  // 恢复上次测试结果（应对微信浏览器页面刷新）
+  var saved = loadResultSession();
+  if (saved && saved.t) {
+    renderResult(saved.t, saved.s);
+  }
 });
 
 // ======= 导航 =======
@@ -175,6 +195,7 @@ function bindStartButton() {
   $('retest-btn').addEventListener('click', () => {
     currentQuestion = 0;
     for (const k in answers) delete answers[k];
+    clearResultSession();
     showPage('home');
   });
 }
@@ -183,6 +204,7 @@ function bindStartButton() {
 function startQuiz() {
   currentQuestion = 0;
   for (const k in answers) delete answers[k];
+  clearResultSession();
   showPage('quiz');
   renderQuestion();
 }
@@ -245,6 +267,7 @@ function showResult() {
     typeStr += left >= right ? d.leftCode : d.rightCode;
   });
 
+  saveResultSession(typeStr, scores);
   renderResult(typeStr, scores);
 }
 
