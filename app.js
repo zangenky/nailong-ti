@@ -124,8 +124,10 @@ const CustomStorage = {
 const $ = id => document.getElementById(id);
 
 document.addEventListener('DOMContentLoaded', async () => {
-  // 线上版隐藏管理按钮
-  if (window.location.protocol !== 'file:') {
+  // 线上版通过 ?admin=1 参数显示管理按钮
+  const isOnline = window.location.protocol !== 'file:';
+  const hasAdminParam = new URLSearchParams(window.location.search).get('admin') === '1';
+  if (isOnline && !hasAdminParam) {
     const btn = document.getElementById('admin-nav-btn');
     if (btn) btn.style.display = 'none';
   }
