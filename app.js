@@ -482,25 +482,43 @@ function renderQuestionEditor(container) {
     })(qi);
   }
 
-  // 保存 + 恢复默认按钮
+  // 按钮行
   var btnDiv = document.createElement('div');
-  btnDiv.style.cssText = 'display:flex;gap:8px;margin-top:16px;';
-  btnDiv.innerHTML = '<button id="save-questions-btn" style="flex:1;padding:12px;background:#4CAF50;color:white;border:none;border-radius:8px;font-size:14px;cursor:pointer;">💾 保存题目</button>'
-    + '<button id="reset-questions-btn" style="flex:1;padding:12px;background:#f44336;color:white;border:none;border-radius:8px;font-size:14px;cursor:pointer;">↺ 恢复默认</button>';
+  btnDiv.style.cssText = 'display:flex;flex-direction:column;gap:8px;margin-top:16px;';
+
+  var row1 = document.createElement('div');
+  row1.style.cssText = 'display:flex;gap:8px;';
+  row1.innerHTML = '<button id="save-questions-btn" style="flex:1;padding:12px;background:#4CAF50;color:white;border:none;border-radius:8px;font-size:14px;cursor:pointer;">💾 保存到本地</button>'
+    + '<button id="publish-questions-btn" style="flex:1;padding:12px;background:#FF9800;color:white;border:none;border-radius:8px;font-size:14px;cursor:pointer;">🌐 发布到线上</button>';
+  btnDiv.appendChild(row1);
+
+  var row2 = document.createElement('div');
+  row2.style.cssText = 'display:flex;gap:8px;';
+  row2.innerHTML = '<button id="reset-questions-btn" style="flex:1;padding:10px;background:#f44336;color:white;border:none;border-radius:8px;font-size:13px;cursor:pointer;">↺ 恢复默认</button>';
+  btnDiv.appendChild(row2);
+
   container.appendChild(btnDiv);
 
-  $('save-questions-btn').addEventListener('click', function() {
+  function collectQuestions() {
     var cards = container.querySelectorAll('.admin-card');
-    var newQuestions = [];
+    var result = [];
     for (var j = 0; j < cards.length; j++) {
-      newQuestions.push({
+      result.push({
         dim: cards[j].querySelector('.q-dim').value,
         q: cards[j].querySelector('.q-text').value,
         left: cards[j].querySelector('.q-left').value,
         right: cards[j].querySelector('.q-right').value
       });
     }
-    saveCustomQuestions(newQuestions);
+    return result;
+  }
+
+  $('save-questions-btn').addEventListener('click', function() {
+    saveCustomQuestions(collectQuestions(), false);
+  });
+
+  $('publish-questions-btn').addEventListener('click', function() {
+    saveCustomQuestions(collectQuestions(), true);
   });
 
   $('reset-questions-btn').addEventListener('click', function() {
@@ -511,7 +529,7 @@ function renderQuestionEditor(container) {
   });
 }
 
-function saveCustomQuestions(qList) {
+function saveCustomQuestions(qList, showPublish) {
   // 验证每个维度至少 1 题
   var dims = {};
   for (var i = 0; i < qList.length; i++) {
@@ -523,11 +541,66 @@ function saveCustomQuestions(qList) {
 
   try {
     localStorage.setItem('nt-questions', JSON.stringify(qList));
-    alert('✅ 题目已保存！');
-    renderAdminList();
+    alert('✅ 已保存到本地！（仅你可见）');
+    if (showPublish) {
+      showPublishDialog(qList);
+    } else {
+      renderAdminList();
+    }
   } catch (e) {
     alert('保存失败：' + e.message);
   }
+}
+
+function showPublishDialog(qList) {
+  // 生成 QUESTIONS 代码
+  var code = 'const QUESTIONS = [\n';
+  for (var i = 0; i < qList.length; i++) {
+    var q = qList[i];
+    code += '  {\n    dim: \'' + q.dim + '\',\n    q: \'' + escapeJsStr(q.q) + '\',\n    left: \'' + escapeJsStr(q.left) + '\',\n    right: \'' + escapeJsStr(q.right) + '\'\n  }';
+    if (i < qList.length - 1) code += ',';
+    code += '\n';
+  }
+  code += '];';
+
+  // 弹窗遮罩
+  var overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px;';
+  overlay.addEventListener('click', function(e) { if (e.target === overlay) document.body.removeChild(overlay); });
+
+  var box = document.createElement('div');
+  box.style.cssText = 'background:white;border-radius:16px;padding:24px;max-width:600px;width:100%;max-height:80vh;overflow-y:auto;box-shadow:0 10px 40px rgba(0,0,0,0.3);';
+  box.innerHTML = '<h3 style="margin:0 0 8px;color:#333;">🌐 发布到线上</h3>'
+    + '<p style="font-size:14px;color:#666;margin-bottom:16px;">把下面的代码复制后发给我，我来更新 data.js 并部署到线上，所有人就能看到了。</p>'
+    + '<textarea id="publish-code" style="width:100%;height:300px;padding:12px;border:1px solid #ddd;border-radius:8px;font-size:13px;font-family:Courier New,monospace;resize:vertical;white-space:pre;overflow:auto;" readonly></textarea>'
+    + '<div style="display:flex;gap:8px;margin-top:12px;">'
+    + '<button id="copy-code-btn" style="flex:1;padding:12px;background:#667eea;color:white;border:none;border-radius:8px;font-size:14px;cursor:pointer;">📋 复制代码</button>'
+    + '<button id="close-dialog-btn" style="flex:1;padding:12px;background:#eee;color:#666;border:none;border-radius:8px;font-size:14px;cursor:pointer;">关闭</button></div>';
+
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+
+  $('publish-code').value = code;
+  $('publish-code').style.height = Math.min(300, code.split('\n').length * 20) + 'px';
+
+  $('copy-code-btn').addEventListener('click', function() {
+    var ta = $('publish-code');
+    ta.select();
+    try {
+      document.execCommand('copy');
+      $('copy-code-btn').textContent = '✅ 已复制！';
+      setTimeout(function() { $('copy-code-btn').textContent = '📋 复制代码'; }, 2000);
+    } catch (e) { alert('复制失败，请手动选中并复制'); }
+  });
+
+  $('close-dialog-btn').addEventListener('click', function() {
+    document.body.removeChild(overlay);
+    renderAdminList();
+  });
+}
+
+function escapeJsStr(str) {
+  return String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n').replace(/\r/g, '\\r');
 }
 
 function htmlEncode(str) {
