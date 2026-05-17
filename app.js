@@ -269,13 +269,20 @@ function renderQuestion() {
   leftBtn.className = 'option-btn';
   leftBtn.innerHTML = '<span class="option-key">A</span> ' + q.left;
   leftBtn.addEventListener('click', function() { answerQuestion('left'); });
+  container.appendChild(leftBtn);
+
+  if (q.neutral) {
+    var neutralBtn = document.createElement('button');
+    neutralBtn.className = 'option-btn option-neutral';
+    neutralBtn.innerHTML = '<span class="option-key">C</span> ' + q.neutral;
+    neutralBtn.addEventListener('click', function() { answerQuestion('neutral'); });
+    container.appendChild(neutralBtn);
+  }
 
   var rightBtn = document.createElement('button');
   rightBtn.className = 'option-btn';
   rightBtn.innerHTML = '<span class="option-key">B</span> ' + q.right;
   rightBtn.addEventListener('click', function() { answerQuestion('right'); });
-
-  container.appendChild(leftBtn);
   container.appendChild(rightBtn);
 }
 
@@ -297,8 +304,12 @@ function showResult() {
     var q = qList[i];
     var side = answers[i];
     var dim = DIM_MAP[q.dim];
-    var code = side === 'left' ? dim.leftCode : dim.rightCode;
-    scores[code]++;
+    if (side === 'left') {
+      scores[dim.leftCode]++;
+    } else if (side === 'right') {
+      scores[dim.rightCode]++;
+    }
+    // neutral: 不计分
   }
   var typeStr = '';
   var dimKeys = ['EI', 'NS', 'TF', 'JP'];
@@ -473,7 +484,9 @@ function renderQuestionEditor(container) {
         + '<div style="display:flex;gap:8px;align-items:center;"><label style="font-size:13px;color:#888;width:36px;flex-shrink:0;">A</label>'
         + '<input class="q-left" value="' + htmlEncode(q.left) + '" style="flex:1;padding:6px;border:1px solid #ddd;border-radius:6px;font-size:13px;"></div>'
         + '<div style="display:flex;gap:8px;align-items:center;"><label style="font-size:13px;color:#888;width:36px;flex-shrink:0;">B</label>'
-        + '<input class="q-right" value="' + htmlEncode(q.right) + '" style="flex:1;padding:6px;border:1px solid #ddd;border-radius:6px;font-size:13px;"></div>';
+        + '<input class="q-right" value="' + htmlEncode(q.right) + '" style="flex:1;padding:6px;border:1px solid #ddd;border-radius:6px;font-size:13px;"></div>'
+        + '<div style="display:flex;gap:8px;align-items:center;"><label style="font-size:13px;color:#888;width:36px;flex-shrink:0;">C</label>'
+        + '<input class="q-neutral" value="' + htmlEncode(q.neutral || '') + '" style="flex:1;padding:6px;border:1px solid #ddd;border-radius:6px;font-size:13px;" placeholder="中立选项（选C不计分）"></div>';
 
       // 设置下拉框当前值
       card.querySelector('.q-dim').value = q.dim;
@@ -507,7 +520,8 @@ function renderQuestionEditor(container) {
         dim: cards[j].querySelector('.q-dim').value,
         q: cards[j].querySelector('.q-text').value,
         left: cards[j].querySelector('.q-left').value,
-        right: cards[j].querySelector('.q-right').value
+        right: cards[j].querySelector('.q-right').value,
+        neutral: cards[j].querySelector('.q-neutral').value || ''
       });
     }
     return result;
@@ -557,7 +571,11 @@ function showPublishDialog(qList) {
   var code = 'const QUESTIONS = [\n';
   for (var i = 0; i < qList.length; i++) {
     var q = qList[i];
-    code += '  {\n    dim: \'' + q.dim + '\',\n    q: \'' + escapeJsStr(q.q) + '\',\n    left: \'' + escapeJsStr(q.left) + '\',\n    right: \'' + escapeJsStr(q.right) + '\'\n  }';
+    code += '  {\n    dim: \'' + q.dim + '\',\n    q: \'' + escapeJsStr(q.q) + '\',\n    left: \'' + escapeJsStr(q.left) + '\',\n    right: \'' + escapeJsStr(q.right) + '\'';
+    if (q.neutral) {
+      code += ',\n    neutral: \'' + escapeJsStr(q.neutral) + '\'';
+    }
+    code += '\n  }';
     if (i < qList.length - 1) code += ',';
     code += '\n';
   }

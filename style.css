@@ -98,6 +98,11 @@ body {
 }
 .option-btn:hover .option-key { background: #FFD700; color: white; }
 
+.option-neutral { border-color: #e0e0e0; background: rgba(255,255,255,0.85); }
+.option-neutral:hover { border-color: #4CAF50; transform: translateX(4px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+.option-neutral .option-key { background: #e8f5e9; color: #4CAF50; }
+.option-neutral:hover .option-key { background: #4CAF50; color: white; }
+
 /* 结果页 */
 .result-content {
   background: rgba(255,255,255,0.95); border-radius: 20px;
